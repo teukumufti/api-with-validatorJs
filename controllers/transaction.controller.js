@@ -1,12 +1,22 @@
 const Validator = require("validatorjs");
 const Helpers = require("../helpers");
 const Db = require("../models");
-const User = Db.user;
+const Transaction = Db.transaction;
 const Op = Db.Sequelize.Op;
 
 exports.lists = (req, res, next) => {
   // variable
-  var { name, email, status, offset, limit, order, sort } = req.query;
+  var {
+    id_product,
+    id_buyer,
+    id_seller,
+    price,
+    status,
+    offset,
+    limit,
+    order,
+    sort,
+  } = req.query;
   var message = [];
 
   offset = parseInt(offset) ? parseInt(offset) : 0;
@@ -16,7 +26,7 @@ exports.lists = (req, res, next) => {
 
   // cek validation
   let rules = {
-    email: "email",
+    id_product: "idProduct",
   };
   let error_msg = {
     in: "invalid :attribute",
@@ -45,28 +55,35 @@ exports.lists = (req, res, next) => {
     let where = {};
 
     try {
-      if (name) {
-        name = name.trim();
-        where.name = name;
+      if (id_product) {
+        id_product = id_product.trim();
+        where.product = id_product;
       }
 
-      if (email) {
-        email = email.trim();
-        where.email = email;
+      if (id_buyer) {
+        id_buyer = id_buyer.trim();
+        where.buyer = id_buyer;
       }
-
+      if (id_seller) {
+        id_seller = id_seller.trim();
+        where.seller = id_seller;
+      }
+      if (price) {
+        price = price.trim();
+        where.price = price;
+      }
       if (status) {
         status = status.trim();
-        where.status = Helpers.getKeyByValue(Helpers.status_default(), status);
+        where.status = status;
       }
-      let data_user = await User.findAndCountAll({
+
+      let data_transaction = await Transaction.findAndCountAll({
         where: where,
         limit: limit,
         offset: offset,
         order: [[order, sort]],
       });
-
-      let rest = Helpers.get_user(data_user.rows);
+      let rest = Helpers.get_transaction(data_transaction.rows);
 
       res.status(200).json({
         code: 200,
@@ -74,7 +91,7 @@ exports.lists = (req, res, next) => {
         message: ["fetch data success."],
         offset: offset,
         limit: limit,
-        total: data_user.count,
+        total: data_transaction.count,
         result: rest,
       });
     } catch (err) {
@@ -129,12 +146,12 @@ exports.info = (req, res, next) => {
         where.id = id;
       }
 
-      const data = await User.findOne({
+      const data = await Transaction.findOne({
         where: where,
       });
 
       if (data) {
-        let rest = Helpers.get_user([data]);
+        let rest = Helpers.get_transaction([data]);
 
         res.status(200).json({
           code: 200,
@@ -163,35 +180,34 @@ exports.info = (req, res, next) => {
 
 exports.store = (req, res, next) => {
   // variable
-  var { name, email } = req.body;
+  var { id_product, id_buyer, id_seller, price, status } = req.body;
   var message = [];
 
-  // register validation cek db
-  Validator.registerAsync(
-    "check_email",
-    async function (email, attribute, req, passes) {
-      let data = await User.findOne({
-        where: { email: email, status: 1 },
-      });
+  // validation cek db
+  //   Validator.registerAsync(
+  //     "check_idBuyer",
+  //     async function (idBuyer, attribute, req, passes) {
+  //       let data = await Transaction.findOne({
+  //         where: { idBuyer: idBuyer },
+  //       });
 
-      if (data === null) {
-        passes();
-      } else {
-        passes(false, "Email already exist.");
-      }
-    }
-  );
+  //       if (data === null) {
+  //         passes();
+  //       } else {
+  //         passes(false, "transaction already exist.");
+  //       }
+  //     }
+  //   );
 
-  // cek validation
-  let rules = {
-    name: "required|min:3",
-    email: "required|email|check_email",
-  };
-  let error_msg = {
-    in: "invalid :attribute",
-  };
+  //   cek validation
+  //   let rules = {
+  //     idBuyer: "check_idBuyer",
+  //   };
+  //   let error_msg = {
+  //     in: "invalid :attribute",
+  //   };
 
-  let validation = new Validator(req.body, rules, error_msg);
+  let validation = new Validator(req.body);
   validation.checkAsync(passes, fails);
 
   function fails() {
@@ -213,13 +229,14 @@ exports.store = (req, res, next) => {
 
     try {
       let params = {};
-
       params.id = id;
-      params.name = name;
-      params.email = email;
+      params.id_product = id_product;
+      params.id_buyer = id_buyer;
+      params.id_seller = id_seller;
+      params.price = price;
+      params.status = status;
 
-      let rest = await User.create(params, { transaction: t });
-
+      let rest = await Transaction.create(params, { transaction: t });
       await t.commit();
 
       res.status(200).json({
@@ -235,99 +252,6 @@ exports.store = (req, res, next) => {
         code: 400,
         status: "error",
         message: [err.message],
-        result: [],
-      });
-    }
-  }
-};
-
-exports.update = (req, res, next) => {
-  // variable
-  var { id, name, email, status } = req.body;
-  var message = [];
-
-  // register validation cek db
-  Validator.registerAsync(
-    "check_email",
-    async function (email, attribute, req, passes) {
-      let data = await User.findOne({
-        where: { email: email, status: 1, id: { [Op.ne]: id } },
-      });
-
-      if (data === null) {
-        passes();
-      } else {
-        passes(false, "Email already exist on another user.");
-      }
-    }
-  );
-
-  // cek validation
-  let rules = {
-    id: "required|numeric",
-    name: "min:3",
-    email: "check_email",
-    status: "in:deleted,actived,inactived,banned",
-  };
-  let error_msg = {
-    required: ":attribute cannot be null",
-    in: "invalid :attribute",
-  };
-  let validation = new Validator(req.body, rules, error_msg);
-  validation.checkAsync(passes, fails);
-
-  function fails() {
-    for (var key in validation.errors.all()) {
-      var value = validation.errors.all()[key];
-      message.push(value[0]);
-    }
-    return res.status(200).json({
-      code: 401,
-      status: "error",
-      message: message,
-      result: [],
-    });
-  }
-  async function passes() {
-    // query
-    let params = {};
-    const t = await Db.sequelize.transaction();
-
-    try {
-      if (name) {
-        name = name.trim();
-        params.name = name;
-      }
-      if (email) {
-        email = email.trim();
-        params.email = email;
-      }
-      if (status) {
-        status = status.trim();
-        params.status = Helpers.getKeyByValue(Helpers.status_default(), status);
-      }
-
-      // update
-      let rest = await User.update(params, {
-        where: { id: id },
-        transaction: t,
-      });
-
-      await t.commit();
-
-      res.status(200).json({
-        code: 200,
-        status: "success",
-        message: ["update data success."],
-        result: rest,
-      });
-    } catch (error) {
-      await t.rollback();
-
-      res.status(200).json({
-        code: 400,
-        status: "error",
-        message: [error.message],
         result: [],
       });
     }
@@ -369,7 +293,10 @@ exports.destroy = (req, res, next) => {
 
     try {
       // delete
-      let rest = await User.destroy({ where: { id: id }, transaction: t });
+      let rest = await Transaction.destroy({
+        where: { id: id },
+        transaction: t,
+      });
 
       await t.commit();
 

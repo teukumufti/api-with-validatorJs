@@ -1,12 +1,22 @@
 const Validator = require("validatorjs");
 const Helpers = require("../helpers");
 const Db = require("../models");
-const User = Db.user;
+const Product = Db.product;
 const Op = Db.Sequelize.Op;
 
 exports.lists = (req, res, next) => {
   // variable
-  var { name, email, status, offset, limit, order, sort } = req.query;
+  var {
+    product_name,
+    product_category,
+    product_desc,
+    product_image,
+    product_qty,
+    offset,
+    limit,
+    order,
+    sort,
+  } = req.query;
   var message = [];
 
   offset = parseInt(offset) ? parseInt(offset) : 0;
@@ -16,7 +26,7 @@ exports.lists = (req, res, next) => {
 
   // cek validation
   let rules = {
-    email: "email",
+    product_name: "product_name",
   };
   let error_msg = {
     in: "invalid :attribute",
@@ -45,28 +55,36 @@ exports.lists = (req, res, next) => {
     let where = {};
 
     try {
-      if (name) {
-        name = name.trim();
-        where.name = name;
+      if (product_name) {
+        product_name = product_name.trim();
+        where.name = product_name;
       }
 
-      if (email) {
-        email = email.trim();
-        where.email = email;
+      if (product_category) {
+        product_category = product_category.trim();
+        where.category = product_category;
       }
 
-      if (status) {
-        status = status.trim();
-        where.status = Helpers.getKeyByValue(Helpers.status_default(), status);
+      if (product_desc) {
+        product_desc = product_desc.trim();
+        where.desc = product_desc;
       }
-      let data_user = await User.findAndCountAll({
+      if (product_image) {
+        product_image = product_image.trim();
+        where.image = product_image;
+      }
+      if (product_qty) {
+        product_qty = product_qty.trim();
+        where.qty = product_qty;
+      }
+
+      let data_product = await Product.findAndCountAll({
         where: where,
         limit: limit,
         offset: offset,
         order: [[order, sort]],
       });
-
-      let rest = Helpers.get_user(data_user.rows);
+      let rest = Helpers.get_product(data_product.rows);
 
       res.status(200).json({
         code: 200,
@@ -74,7 +92,7 @@ exports.lists = (req, res, next) => {
         message: ["fetch data success."],
         offset: offset,
         limit: limit,
-        total: data_user.count,
+        total: data_product.count,
         result: rest,
       });
     } catch (err) {
@@ -129,12 +147,12 @@ exports.info = (req, res, next) => {
         where.id = id;
       }
 
-      const data = await User.findOne({
+      const data = await Product.findOne({
         where: where,
       });
 
       if (data) {
-        let rest = Helpers.get_user([data]);
+        let rest = Helpers.get_product([data]);
 
         res.status(200).json({
           code: 200,
@@ -162,30 +180,36 @@ exports.info = (req, res, next) => {
 };
 
 exports.store = (req, res, next) => {
+  console.log(req.file);
   // variable
-  var { name, email } = req.body;
+  var {
+    product_name,
+    product_category,
+    product_desc,
+    product_image,
+    product_qty,
+  } = req.body;
   var message = [];
 
-  // register validation cek db
+  // product validation cek db
   Validator.registerAsync(
-    "check_email",
-    async function (email, attribute, req, passes) {
-      let data = await User.findOne({
-        where: { email: email, status: 1 },
+    "check_product",
+    async function (product_name, attribute, req, passes) {
+      let data = await Product.findOne({
+        where: { product_name: product_name },
       });
 
       if (data === null) {
         passes();
       } else {
-        passes(false, "Email already exist.");
+        passes(false, "Product already exist.");
       }
     }
   );
 
   // cek validation
   let rules = {
-    name: "required|min:3",
-    email: "required|email|check_email",
+    product_name: "check_product",
   };
   let error_msg = {
     in: "invalid :attribute",
@@ -210,16 +234,18 @@ exports.store = (req, res, next) => {
     // query
     const id = Helpers.generate_id();
     const t = await Db.sequelize.transaction();
+    var imgsrc = "http://127.0.0.1:3000/images/" + req.file.filename;
 
     try {
       let params = {};
-
       params.id = id;
-      params.name = name;
-      params.email = email;
+      params.product_name = product_name;
+      params.product_category = product_category;
+      params.product_desc = product_desc;
+      params.product_image = imgsrc;
+      params.product_qty = product_qty;
 
-      let rest = await User.create(params, { transaction: t });
-
+      let rest = await Product.create(params, { transaction: t });
       await t.commit();
 
       res.status(200).json({
@@ -243,21 +269,27 @@ exports.store = (req, res, next) => {
 
 exports.update = (req, res, next) => {
   // variable
-  var { id, name, email, status } = req.body;
+  var {
+    id,
+    product_name,
+    product_category,
+    product_desc,
+    product_image,
+    product_qty,
+  } = req.body;
   var message = [];
 
-  // register validation cek db
   Validator.registerAsync(
-    "check_email",
-    async function (email, attribute, req, passes) {
-      let data = await User.findOne({
-        where: { email: email, status: 1, id: { [Op.ne]: id } },
+    "check_product",
+    async function (product_name, attribute, req, passes) {
+      let data = await Product.findOne({
+        where: { product_name: product_name },
       });
 
       if (data === null) {
         passes();
       } else {
-        passes(false, "Email already exist on another user.");
+        passes(false, "Product already exist. on another product name");
       }
     }
   );
@@ -265,14 +297,13 @@ exports.update = (req, res, next) => {
   // cek validation
   let rules = {
     id: "required|numeric",
-    name: "min:3",
-    email: "check_email",
-    status: "in:deleted,actived,inactived,banned",
+    product_name: "check_product",
   };
   let error_msg = {
     required: ":attribute cannot be null",
     in: "invalid :attribute",
   };
+
   let validation = new Validator(req.body, rules, error_msg);
   validation.checkAsync(passes, fails);
 
@@ -294,21 +325,31 @@ exports.update = (req, res, next) => {
     const t = await Db.sequelize.transaction();
 
     try {
-      if (name) {
-        name = name.trim();
-        params.name = name;
+      if (product_name) {
+        product_name = product_name.trim();
+        params.product_name = product_name;
       }
-      if (email) {
-        email = email.trim();
-        params.email = email;
+
+      if (product_category) {
+        product_category = product_category.trim();
+        params.product_category = product_category;
       }
-      if (status) {
-        status = status.trim();
-        params.status = Helpers.getKeyByValue(Helpers.status_default(), status);
+
+      if (product_desc) {
+        product_desc = product_desc.trim();
+        params.product_desc = product_desc;
+      }
+      if (product_image) {
+        product_image = product_image.trim();
+        params.product_image = product_image;
+      }
+      if (product_qty) {
+        product_qty = product_qty.trim();
+        params.product_qty = product_qty;
       }
 
       // update
-      let rest = await User.update(params, {
+      let rest = await Product.update(params, {
         where: { id: id },
         transaction: t,
       });
@@ -369,7 +410,7 @@ exports.destroy = (req, res, next) => {
 
     try {
       // delete
-      let rest = await User.destroy({ where: { id: id }, transaction: t });
+      let rest = await Product.destroy({ where: { id: id }, transaction: t });
 
       await t.commit();
 

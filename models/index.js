@@ -36,6 +36,8 @@ db.Sequelize = Sequelize;
 db.sequelize = sequelize;
 
 db.user = require("./user.model.js")(sequelize, Sequelize);
+db.product = require("./product.model.js")(sequelize, Sequelize);
+db.transaction = require("./transaction.model.js")(sequelize, Sequelize);
 
 db.sequelize.sync();
 
